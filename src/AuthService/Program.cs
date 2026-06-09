@@ -6,8 +6,17 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using AuthService.Services;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(80, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+});
 
 builder.Services.AddControllers();
 
@@ -41,7 +50,16 @@ builder.Services.AddScoped<JwtService>();
 
 builder.Services.AddHostedService<TokenCleanupService>();
 
+builder.Services.AddGrpc();
+builder.Services.AddGrpcReflection();
+
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    Console.WriteLine($"Request: {context.Request.Method} {context.Request.Path} Protocol: {context.Request.Protocol}");
+    await next();
+});
 
 using (var scope = app.Services.CreateScope())
 {
@@ -93,6 +111,8 @@ await consulClient.Agent.ServiceRegister(registration);
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapControllers();
+
 app.MapGet("/check-db", async (AppDbContext db) =>
 {
     var canConnect = await db.Database.CanConnectAsync();
@@ -101,6 +121,9 @@ app.MapGet("/check-db", async (AppDbContext db) =>
 
 app.MapGet("/health", () => Results.Ok("Healthy"));
 
-app.MapControllers();
+app.MapGrpcService<UserService>();
+app.MapGrpcReflectionService();
+
+app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client.");
 
 app.Run();
