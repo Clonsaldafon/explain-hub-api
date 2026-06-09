@@ -1,9 +1,5 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/ApiGateway/ApiGateway.csproj" />
     <Project Path="src/AuthService/AuthService.csproj" />
-    <Project Path="src/QuestionService/QuestionService.csproj" />
-    <Project Path="src/Shared/Shared.csproj" />
-    <Project Path="src/UserService/UserService.csproj" />
   </Folder>
 </Solution>
