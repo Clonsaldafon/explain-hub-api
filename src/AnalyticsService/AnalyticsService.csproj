@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ClickHouse.Ado" Version="2.0.5" />
+        <PackageReference Include="ClickHouse.Client" Version="7.14.0" />
+        <PackageReference Include="MassTransit" Version="8.3.5" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.5" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.27"/>
+        <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"/>
+    </ItemGroup>
+
+</Project>
