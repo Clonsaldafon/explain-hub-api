@@ -1,12 +1,16 @@
-﻿using Worker.Infrastructure.Email;
+﻿using MassTransit;
+using Worker.Infrastructure.Email;
 using Worker.Messages;
 
 namespace Worker.Consumers;
 
-public class LikeNotificationConsumer(IEmailSender emailSender) : IConsumer<LikeNotificationMessage>
+public class LikeNotificationConsumer(IEmailSender emailSender) : MassTransit.IConsumer<LikeNotificationMessage>
 {
-    public async Task ConsumeAsync(LikeNotificationMessage message, CancellationToken ct)
+    
+    public async Task Consume(ConsumeContext<LikeNotificationMessage> context)
     {
+        var message = context.Message;
+        
         string subject = $"Вас лайкнули под постом {message.PostTitle}";
 
         string body = $@"<div style='font-family: Arial, sans-serif; padding: 20px; text-align: center;'>
@@ -17,6 +21,6 @@ public class LikeNotificationConsumer(IEmailSender emailSender) : IConsumer<Like
                 </a>
                 </div>";
         
-        await emailSender.SendAsync(message.Recipient, subject, body, ct);
+        await emailSender.SendAsync(message.Recipient, subject, body, context.CancellationToken);
     }
 }

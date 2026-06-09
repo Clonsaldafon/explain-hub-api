@@ -1,13 +1,15 @@
-﻿using Worker.Infrastructure.Email;
+﻿using MassTransit;
+using Worker.Infrastructure.Email;
 using Worker.Messages;
 
 namespace Worker.Consumers;
 
-public class ConfirmEmailConsumer(IEmailSender emailSender) : IConsumer<ConfirmEmailMessage>
+public class ConfirmEmailConsumer(IEmailSender emailSender) : MassTransit.IConsumer<ConfirmEmailMessage>
 {
-    public async Task ConsumeAsync(ConfirmEmailMessage message, CancellationToken ct)
+
+    public async Task Consume(ConsumeContext<ConfirmEmailMessage> context)
     {
-        Console.WriteLine($"[Worker] Получено событие подтверждения почты! Отправляю письмо на: {message.Recipient}");
+        var message = context.Message;
         
         string subject = "Добро пожаловать в Explain Hub! Подтвердите вашу почту";
 
@@ -20,6 +22,6 @@ public class ConfirmEmailConsumer(IEmailSender emailSender) : IConsumer<ConfirmE
                 Если ссылка не работает, скопируйте этот адрес в браузер: {message.Url}
             </p>";
         
-        await emailSender.SendAsync(message.Recipient, subject, body, ct);
+        await emailSender.SendAsync(message.Recipient, subject, body, context.CancellationToken);
     }
 }

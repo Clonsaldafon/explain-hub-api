@@ -73,8 +73,12 @@ services:
 
   
   worker:
-    build: ./src/Worker
+    build: 
+      context: .
+      dockerfile: src/Worker/Dockerfile
     container_name: worker-service
+    env_file:
+      - .env
     depends_on:
       auth-service:
         condition: service_started
@@ -83,8 +87,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
+      - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
       - SmtpSettings__Host=smtp.yandex.ru
       - SmtpSettings__Port=465
       - SmtpSettings__Username=${SMTP_USERNAME}
