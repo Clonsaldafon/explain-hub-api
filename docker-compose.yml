@@ -71,5 +71,24 @@ services:
       timeout: 5s
       retries: 3
 
+  
+  worker:
+    build: ./src/Worker
+    container_name: worker-service
+    depends_on:
+      auth-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - SmtpSettings__Host=smtp.yandex.ru
+      - SmtpSettings__Port=465
+      - SmtpSettings__Username=${SMTP_USERNAME}
+      - SmtpSettings__Password=${SMTP_PASSWORD}
+      - SmtpSettings__SenderName=ExplainHub
 volumes:
   auth-db-data:
