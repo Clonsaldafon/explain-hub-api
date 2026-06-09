@@ -21,6 +21,12 @@ public class User
 
     [Column("role")]
     public UserRole Role { get; set; } = UserRole.User;
+    
+    [Column("is_email_confirmed")]
+    public bool IsEmailConfirmed { get; set; } = false;
+
+    [Column("email_confirmation_token")]
+    public string? EmailConfirmationToken { get; set; }
 
     [Column("is_deleted")]
     public bool IsDeleted { get; set; } = false;

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using AuthService.Services;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +15,7 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(80, listenOptions =>
     {
-        listenOptions.Protocols = HttpProtocols.Http2;
+        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
     });
 });
 
@@ -52,6 +53,12 @@ builder.Services.AddHostedService<TokenCleanupService>();
 
 builder.Services.AddGrpc();
 builder.Services.AddGrpcReflection();
+
+builder.Services.AddSingleton(sp =>
+{
+    var publisher = new RabbitMqPublisher(sp.GetRequiredService<IConfiguration>());
+    return publisher;
+});
 
 var app = builder.Build();
 
@@ -111,6 +118,32 @@ await consulClient.Agent.ServiceRegister(registration);
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var userIdClaim = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (userIdClaim != null && Guid.TryParse(userIdClaim, out var userId))
+        {
+            using var scope = context.RequestServices.CreateScope();
+
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null || !user.IsEmailConfirmed)
+            {
+                context.Response.StatusCode = 403;
+                await context.Response.WriteAsync("Email not confirmed");
+
+                return;
+            }
+        }
+    }
+
+    await next();
+});
+
 app.MapControllers();
 
 app.MapGet("/check-db", async (AppDbContext db) =>
@@ -121,9 +154,12 @@ app.MapGet("/check-db", async (AppDbContext db) =>
 
 app.MapGet("/health", () => Results.Ok("Healthy"));
 
-app.MapGrpcService<UserService>();
+app.MapGrpcService<UserService>().RequireHost("*:5001");
 app.MapGrpcReflectionService();
 
 app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client.");
+
+var publisher = app.Services.GetRequiredService<RabbitMqPublisher>();
+AppDomain.CurrentDomain.ProcessExit += async (s, e) => await publisher.DisposeAsync();
 
 app.Run();

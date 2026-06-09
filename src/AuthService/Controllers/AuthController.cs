@@ -15,11 +15,13 @@ public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly JwtService _jwt;
+    private readonly RabbitMqPublisher _rabbitMqPublisher;
 
-    public AuthController(AppDbContext db, JwtService jwt)
+    public AuthController(AppDbContext db, JwtService jwt, RabbitMqPublisher rabbitMqPublisher)
     {
         _db = db;
         _jwt = jwt;
+        _rabbitMqPublisher = rabbitMqPublisher;
     }
 
     [HttpPost("register")]
@@ -28,28 +30,27 @@ public class AuthController : ControllerBase
         if (await _db.Users.AnyAsync(u => u.Email == dto.Email))
             return BadRequest("Email already exists");
         
+        var confirmationToken = Guid.NewGuid().ToString();
         var user = new User
         {
             Email = dto.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = UserRole.User
+            Role = UserRole.User,
+            IsEmailConfirmed = false,
+            EmailConfirmationToken = confirmationToken
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        var accessToken = _jwt.GenerateAccessToken(user);
-        var refreshToken = _jwt.GenerateRefreshToken();
+        var confirmationLink = $"http://localhost:8080/api/v1/auth/confirm-email?token={confirmationToken}";
+        await _rabbitMqPublisher.PublishConfirmationEmailAsync(user.Email, confirmationLink);
 
-        _db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(double.Parse(_jwt.Config["Jwt:RefreshTokenExpirationDays"]!))
+        return Ok(new {
+            Email = user.Email,
+            NeedsConfirmation = true,
+            Message = "Please confirm your email address. Confirmation link has been sent"
         });
-        await _db.SaveChangesAsync();
-
-        return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken, Email = user.Email });
     }
 
     [HttpPost("login")]
@@ -62,6 +63,9 @@ public class AuthController : ControllerBase
         
         if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             return Unauthorized("Invalid credentials");
+        
+        if (!user.IsEmailConfirmed)
+            return Unauthorized("Email not confirmed. Please check your inbox");
         
         var accessToken = _jwt.GenerateAccessToken(user);
         var refreshToken = _jwt.GenerateRefreshToken();
@@ -141,5 +145,37 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { message = "All refresh tokens revoked" });
+    }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail([FromQuery] string token)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.EmailConfirmationToken == token);
+
+        if (user == null)
+            return BadRequest("Invalid or expired confirmation token");
+        
+        user.IsEmailConfirmed = true;
+        user.EmailConfirmationToken = null;
+        await _db.SaveChangesAsync();
+
+        var accessToken = _jwt.GenerateAccessToken(user);
+        var refreshToken = _jwt.GenerateRefreshToken();
+
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            Token = refreshToken,
+            ExpiresAt = DateTime.UtcNow.AddDays(double.Parse(_jwt.Config["Jwt:RefreshTokenExpirationDays"]!))
+        });
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken,
+            Email = user.Email,
+            Message = "Email confirmed successfully. You are now logged in"
+        });
     }
 }

@@ -27,9 +27,9 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   consul:
     image: hashicorp/consul:1.15
@@ -70,6 +70,7 @@ services:
       - Admin__Password=${ADMIN_PASSWORD:-admin123}
     ports:
       - "8080:80"
+      - "5001:5001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 15s
