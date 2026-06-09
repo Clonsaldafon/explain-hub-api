@@ -1,41 +1,74 @@
+using Microsoft.EntityFrameworkCore;
+using AuthService.Data;
+using Consul;
+using AuthService.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("AuthDb")));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
+
+    var adminEmail = builder.Configuration["Admin:Email"] ?? "admin@example.com";
+    var adminPassword = builder.Configuration["Admin:Password"] ?? "admin123";
+
+    if (!dbContext.Users.Any(u => u.Email == adminEmail))
+    {
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
+        dbContext.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            Email = adminEmail,
+            PasswordHash = passwordHash,
+            Role = UserRole.Admin,
+            IsDeleted = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        dbContext.SaveChanges();
+        Console.WriteLine($"Admin user created: {adminEmail}");
+    }
 }
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
+var consulClient = new ConsulClient(config =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+    config.Address = new Uri(builder.Configuration["Consul:Host"] ?? "http://consul:8500");
+});
+
+var registration = new AgentServiceRegistration
+{
+    ID = $"auth-service-{Guid.NewGuid()}",
+    Name = "auth-service",
+    Address = "auth-service",
+    Port = 80,
+    Check = new AgentServiceCheck
+    {
+        HTTP = "http://auth-service/health",
+        Interval = TimeSpan.FromSeconds(10),
+        Timeout = TimeSpan.FromSeconds(5),
+        DeregisterCriticalServiceAfter = TimeSpan.FromMinutes(1)
+    }
 };
 
-app.MapGet("/weatherforecast", () =>
+await consulClient.Agent.ServiceRegister(registration);
+
+app.UseAuthorization();
+
+app.MapGet("/check-db", async (AppDbContext db) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var canConnect = await db.Database.CanConnectAsync();
+    return canConnect ? "Database connection OK" : "Database connection FAILED";
+});
+
+app.MapGet("/health", () => Results.Ok("Healthy"));
+
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
