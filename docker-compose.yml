@@ -54,15 +54,20 @@ services:
       consul:
         condition: service_healthy
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ASPNETCORE_URLS=http://+:80
-      - ConnectionStrings__AuthDb=Host=auth-db;Port=5432;Database=authdb;Username=auth;Password=auth123
-      - RabbitMQ__HostName=rabbitmq
-      - RabbitMQ__UserName=guest
-      - RabbitMQ__Password=guest
-      - Consul__Host=http://consul:8500
-      - Admin__Email=admin@example.com
-      - Admin__Password=admin123
+      - ConnectionStrings__AuthDb=Host=${AUTH_DB_HOST:-auth-db};Port=${AUTH_DB_PORT:-5432};Database=${AUTH_DB_NAME:-authdb};Username=${AUTH_DB_USER:-auth};Password=${AUTH_DB_PASSWORD:-auth123}
+      - RabbitMQ__HostName=${RABBITMQ_HOST:-rabbitmq}
+      - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
+      - Consul__Host=${CONSUL_HOST:-http://consul:8500}
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=${JWT_ISSUER:-auth-service}
+      - Jwt__Audience=${JWT_AUDIENCE:-api-gateway}
+      - Jwt__AccessTokenExpirationMinutes=${JWT_ACCESS_EXPIRATION_MINUTES:-15}
+      - Jwt__RefreshTokenExpirationDays=${JWT_REFRESH_EXPIRATION_DAYS:-7}
+      - Admin__Email=${ADMIN_EMAIL:-admin@example.com}
+      - Admin__Password=${ADMIN_PASSWORD:-admin123}
     ports:
       - "8080:80"
     healthcheck:

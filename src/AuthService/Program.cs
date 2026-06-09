@@ -2,6 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using AuthService.Data;
 using Consul;
 using AuthService.Models;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using AuthService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +13,33 @@ builder.Services.AddControllers();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("AuthDb")));
+
+var jwtKey = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!);
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(jwtKey),
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+builder.Services.AddScoped<JwtService>();
+
+builder.Services.AddHostedService<TokenCleanupService>();
 
 var app = builder.Build();
 
@@ -59,6 +90,7 @@ var registration = new AgentServiceRegistration
 
 await consulClient.Agent.ServiceRegister(registration);
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/check-db", async (AppDbContext db) =>
