@@ -7,6 +7,8 @@ public class ConfirmEmailConsumer(IEmailSender emailSender) : IConsumer<ConfirmE
 {
     public async Task ConsumeAsync(ConfirmEmailMessage message, CancellationToken ct)
     {
+        Console.WriteLine($"[Worker] Получено событие подтверждения почты! Отправляю письмо на: {message.Recipient}");
+        
         string subject = "Добро пожаловать в Explain Hub! Подтвердите вашу почту";
 
         string body = $@"<h2>Добро пожаловать в ExplainHub!</h2>

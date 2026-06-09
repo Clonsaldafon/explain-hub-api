@@ -3,7 +3,7 @@ using Worker.Messages;
 
 namespace Worker.Consumers;
 
-public class LikeNoticationConsumer(IEmailSender emailSender) : IConsumer<LikeNotificationMessage>
+public class LikeNotificationConsumer(IEmailSender emailSender) : IConsumer<LikeNotificationMessage>
 {
     public async Task ConsumeAsync(LikeNotificationMessage message, CancellationToken ct)
     {
