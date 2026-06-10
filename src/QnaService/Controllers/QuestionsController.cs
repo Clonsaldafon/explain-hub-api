@@ -16,17 +16,19 @@ public class QuestionsController : ApiControllerBase
     private readonly IObjectStorageService _storage;
     private readonly RabbitMqLikePublisher _likePublisher;
     private readonly IConfiguration _configuration;
-
+    private readonly ILogger<QuestionsController> _logger;
     public QuestionsController(
         QnaDbContext db,
         IObjectStorageService storage,
         RabbitMqLikePublisher likePublisher,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<QuestionsController> logger)
     {
         _db = db;
         _storage = storage;
         _likePublisher = likePublisher;
         _configuration = configuration;
+        _logger = logger; 
     }
 
     [HttpGet]
@@ -226,6 +228,7 @@ public class QuestionsController : ApiControllerBase
             return Ok(new LikeResultDto(question.Id, question.LikeCount, true));
         }
 
+        _logger.LogInformation($"User {currentUser.Id} liked question {question.Id} (Title: {question.Title})");
         await PublishLikeNotificationAsync(
             question.AuthorId,
             question.AuthorEmail,

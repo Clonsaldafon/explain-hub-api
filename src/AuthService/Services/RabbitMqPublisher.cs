@@ -33,7 +33,6 @@ public class RabbitMqPublisher : IAsyncDisposable
             var userName = _config["RabbitMQ:UserName"] ?? "guest";
             var password = _config["RabbitMQ:Password"] ?? "guest";
 
-            var queueNameEmailConfirmation = _config["RabbitMQ:QueueNameEmailConfirmation"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameEmailConfirmation missing");
             var queueNameUserDeleted = _config["RabbitMQ:QueueNameUserDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserDeleted missing");
             var queueNameUserContentDeleted = _config["RabbitMQ:QueueNameUserContentDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserContentDeleted missing");
 
@@ -48,8 +47,9 @@ public class RabbitMqPublisher : IAsyncDisposable
 
             _connection = await factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
-
-            await _channel.QueueDeclareAsync(queue: queueNameEmailConfirmation, durable: true, exclusive: false, autoDelete: false);
+            
+            await _channel.ExchangeDeclareAsync(exchange: "email-exchange", type: ExchangeType.Direct, durable: true, autoDelete: false);
+            
             await _channel.QueueDeclareAsync(queue: queueNameUserDeleted, durable: true, exclusive: false, autoDelete: false);
             await _channel.QueueDeclareAsync(queue: queueNameUserContentDeleted, durable: true, exclusive: false, autoDelete: false);
 
@@ -61,42 +61,29 @@ public class RabbitMqPublisher : IAsyncDisposable
         }
     }
 
-    public async Task PublishConfirmationEmailAsync(string email, string confirmationLink)
+    public async Task PublishConfirmationEmailAsync(Guid userId, string email, string confirmationLink)
     {
-        int retryCount = 0;
-        while (true)
-        {
-            try
-            {
-                await EnsureConnectedAsync();
-                break;
-            }
-            catch (Exception ex) when (retryCount < 10)
-            {
-                retryCount++;
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, retryCount));
-                Console.WriteLine($"RabbitMQ connection attempt {retryCount} failed: {ex.Message}. Retrying in {delay.TotalSeconds} sec...");
-                await Task.Delay(delay);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to connect to RabbitMQ after 10 attempts: {ex.Message}");
-                throw;
-            }
-        }
-
-        var message = new { Email = email, ConfirmationLink = confirmationLink };
+        await EnsureConnectedAsync();
+        
+        var message = new 
+        { 
+            Recipient = email, 
+            Url = confirmationLink,
+            Id = userId
+        };
+        
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
-        var queueName = _config["RabbitMQ:QueueNameEmailConfirmation"]!;
-
-        await _channel!.BasicPublishAsync(exchange: "", routingKey: queueName, body: body);
+        
+        await _channel!.BasicPublishAsync(exchange: "email-exchange", routingKey: "confirm-email", body: body);
     }
 
     public async Task PublishUserDeletedAsync(UserDeletedEvent deletedEvent)
     {
         await EnsureConnectedAsync();
+        
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(deletedEvent));
         var queueName = _config["RabbitMQ:QueueNameUserDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserDeleted missing");
+        
         await _channel!.BasicPublishAsync(exchange: "", routingKey: queueName, body: body);
     }
 

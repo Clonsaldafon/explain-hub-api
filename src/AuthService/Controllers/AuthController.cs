@@ -45,7 +45,7 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync();
 
         var confirmationLink = $"http://localhost:8080/api/v1/auth/confirm-email?token={confirmationToken}";
-        await _rabbitMqPublisher.PublishConfirmationEmailAsync(user.Email, confirmationLink);
+        await _rabbitMqPublisher.PublishConfirmationEmailAsync(user.Id, user.Email, confirmationLink);
 
         return Ok(new {
             UserId = user.Id,

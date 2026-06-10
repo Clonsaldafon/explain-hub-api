@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using AuthService.Services;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.Security.Claims;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,8 +67,11 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddHostedService<UserContentDeletedConsumer>();
 
-var app = builder.Build();
+var analyticsUrl = builder.Configuration["Analytics:ServiceUrl"] ?? "http://analytics-service:8080/";
+builder.Logging.AddProvider(new ClickHouseLoggerProvider(analyticsUrl, "auth-service"));
 
+var app = builder.Build();
+app.UseHttpMetrics();
 app.Use(async (context, next) =>
 {
     Console.WriteLine($"Request: {context.Request.Method} {context.Request.Path} Protocol: {context.Request.Protocol}");
@@ -119,7 +123,18 @@ var registration = new AgentServiceRegistration
     }
 };
 
-await consulClient.Agent.ServiceRegister(registration);
+app.Lifetime.ApplicationStarted.Register(async () =>
+{
+    try
+    {
+        await consulClient.Agent.ServiceRegister(registration);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Consul registration failed: {ex.Message}");
+    }
+});
+
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -167,5 +182,7 @@ app.MapGet("/", () => "Communication with gRPC endpoints must be made through a 
 
 var publisher = app.Services.GetRequiredService<RabbitMqPublisher>();
 AppDomain.CurrentDomain.ProcessExit += async (s, e) => await publisher.DisposeAsync();
+
+app.MapMetrics();
 
 app.Run();

@@ -63,6 +63,8 @@ public class UserContentDeletedConsumer : BackgroundService
         }
     }
 
+
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await EnsureConnectedAsync();
@@ -77,24 +79,29 @@ public class UserContentDeletedConsumer : BackgroundService
 
             try
             {
-                if (message?.Success == true)
+                if (message != null)
                 {
                     using var scope = _services.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     var user = await db.Users.FindAsync(new object[] { message.UserId }, cancellationToken: stoppingToken);
+
                     if (user != null)
                     {
-                        db.Users.Remove(user);
-                        await db.SaveChangesAsync(stoppingToken);
-                        Console.WriteLine($"User {message.UserId} permanently deleted after content cleanup");
+                        if (message.Success)
+                        {
+                            db.Users.Remove(user);
+                            await db.SaveChangesAsync(stoppingToken);
+                            Console.WriteLine($"Saga success: User {message.UserId} permanently deleted after content cleanup.");
+                        }
+                        else
+                        {
+                            user.IsDeleted = false;
+                            await db.SaveChangesAsync(stoppingToken);
+                            Console.WriteLine($"Saga aborted: User {message.UserId} restored. Cleanup error: {message.Error}");
+                        }
                     }
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 }
-                else
-                {
-                    Console.WriteLine($"Failed to delete content for user {message?.UserId}: {message?.Error}");
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
-                }
+                await _channel.BasicAckAsync(ea.DeliveryTag, false);
             }
             catch (Exception ex)
             {

@@ -90,6 +90,9 @@ services:
       - RabbitMQ__HostName=${RABBITMQ_HOST:-rabbitmq}
       - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
+      - RabbitMQ__QueueNameEmailConfirmation=email_confirmation
+      - RabbitMQ__QueueNameUserDeleted=user.deleted
+      - RabbitMQ__QueueNameUserContentDeleted=user_content_deleted
       - Consul__Host=${CONSUL_HOST:-http://consul:8500}
       - Jwt__Key=${JWT_KEY}
       - Jwt__Issuer=${JWT_ISSUER:-auth-service}
@@ -98,6 +101,7 @@ services:
       - Jwt__RefreshTokenExpirationDays=${JWT_REFRESH_EXPIRATION_DAYS:-7}
       - Admin__Email=${ADMIN_EMAIL:-admin@example.com}
       - Admin__Password=${ADMIN_PASSWORD:-admin123}
+      - Analytics__ServiceUrl=http://analytics-service:8080/
     ports:
       - "8080:80"
       - "5001:5001"
@@ -106,7 +110,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-
 
   qna-service:
     build:
@@ -144,6 +147,7 @@ services:
       - Consul__Host=${CONSUL_HOST:-http://consul:8500}
       - Consul__ServiceAddress=qna-service
       - Consul__ServicePort=80
+      - Analytics__ServiceUrl=http://analytics-service:8080/
     ports:
       - "8082:80"
     healthcheck:
@@ -151,7 +155,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      
+  
   analytics-service:
     image: analytics-service
     build:
@@ -169,13 +173,13 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-    
+  
   clickhouse-server:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse-server
     ports:
       - "8123:8123"
-      - "9000:9000"
+      - "9002:9002"
     environment:
       - CLICKHOUSE_DB=logs_db
       - CLICKHOUSE_USER=analytics
@@ -198,8 +202,20 @@ services:
     depends_on:
       - clickhouse-server
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - auth-service
+      - qna-service
+      - api-gateway
+
   worker:
-    build: 
+    build:
       context: .
       dockerfile: src/Worker/Dockerfile
     container_name: worker-service
@@ -220,6 +236,30 @@ services:
       - SmtpSettings__Username=${SMTP_USERNAME}
       - SmtpSettings__Password=${SMTP_PASSWORD}
       - SmtpSettings__SenderName=ExplainHub
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/Dockerfile
+    container_name: api-gateway
+    depends_on:
+      auth-service:
+        condition: service_started
+      qna-service:
+        condition: service_started
+      consul:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Consul__Host=http://consul:8500
+    ports:
+      - "8099:80"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
 volumes:
   auth-db-data:

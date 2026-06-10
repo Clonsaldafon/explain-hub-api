@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Prometheus;
 using QnaService.Data;
 using QnaService.Services;
 
@@ -20,6 +21,7 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+builder.Services.AddHostedService<UserDeletedConsumer>();
 
 builder.Services.AddDbContext<QnaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("QnaDb")));
@@ -57,8 +59,13 @@ builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("R
 builder.Services.AddSingleton<IObjectStorageService, MinioObjectStorageService>();
 builder.Services.AddSingleton<RabbitMqLikePublisher>();
 
+var analyticsUrl = builder.Configuration["Analytics:ServiceUrl"] ?? "http://analytics-service:8080/";
+builder.Logging.AddProvider(new ClickHouseLoggerProvider(analyticsUrl, "qna-service"));
+
 var app = builder.Build();
 
+app.UseHttpMetrics();
+    
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -73,12 +80,16 @@ using (var scope = app.Services.CreateScope())
     await storage.EnsureBucketAsync(CancellationToken.None);
 }
 
-await RegisterInConsulAsync(app, builder.Configuration);
+app.Lifetime.ApplicationStarted.Register(async () =>
+{
+    await RegisterInConsulAsync(app, builder.Configuration);
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapMetrics();
 app.MapHealthChecks("/health");
 app.MapGet("/", () => "ExplainHub Q&A service");
 
