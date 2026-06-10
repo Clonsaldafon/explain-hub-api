@@ -6,6 +6,7 @@ using AuthService.Services;
 using AuthService.Dto;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using AuthService.Events;
 
 namespace AuthService.Controllers;
 
@@ -47,6 +48,7 @@ public class AuthController : ControllerBase
         await _rabbitMqPublisher.PublishConfirmationEmailAsync(user.Email, confirmationLink);
 
         return Ok(new {
+            UserId = user.Id,
             Email = user.Email,
             NeedsConfirmation = true,
             Message = "Please confirm your email address. Confirmation link has been sent"
@@ -78,7 +80,7 @@ public class AuthController : ControllerBase
         });
         await _db.SaveChangesAsync();
         
-        return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken, Email = user.Email });
+        return Ok(new { AccessToken = accessToken, RefreshToken = refreshToken, UserId = user.Id, Email = user.Email });
     }
 
     [HttpPost("refresh")]
@@ -121,7 +123,7 @@ public class AuthController : ControllerBase
         });
         await _db.SaveChangesAsync();
 
-        return Ok(new { AccessToken = newAccessToken, RefreshToken = newRefreshToken, Email = user.Email });
+        return Ok(new { AccessToken = newAccessToken, RefreshToken = newRefreshToken, UserId = user.Id, Email = user.Email });
     }
 
     [HttpPost("logout")]
@@ -174,8 +176,32 @@ public class AuthController : ControllerBase
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
+            UserId = user.Id,
             Email = user.Email,
             Message = "Email confirmed successfully. You are now logged in"
         });
+    }
+
+    [HttpDelete("users/{userId}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteUser(Guid userId)
+    {
+        var user = await _db.Users.FindAsync(userId);
+
+        if (user == null)
+            return NotFound("User not found");
+        
+        var deletedEvent = new UserDeletedEvent
+        {
+            UserId = userId,
+            DeletedAt = DateTime.UtcNow
+        };
+
+        await _rabbitMqPublisher.PublishUserDeletedAsync(deletedEvent);
+
+        user.IsDeleted = true;
+        await _db.SaveChangesAsync();
+
+        return Accepted(new { message = "User deletion initiated" });
     }
 }

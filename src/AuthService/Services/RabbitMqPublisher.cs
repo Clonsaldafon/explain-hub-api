@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using AuthService.Events;
 using RabbitMQ.Client;
 
 namespace AuthService.Services;
@@ -31,7 +32,10 @@ public class RabbitMqPublisher : IAsyncDisposable
             var hostName = _config["RabbitMQ:HostName"] ?? throw new InvalidOperationException("RabbitMQ:HostName missing");
             var userName = _config["RabbitMQ:UserName"] ?? "guest";
             var password = _config["RabbitMQ:Password"] ?? "guest";
-            var queueName = _config["RabbitMQ:QueueName"] ?? throw new InvalidOperationException("RabbitMQ:QueueName missing");
+
+            var queueNameEmailConfirmation = _config["RabbitMQ:QueueNameEmailConfirmation"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameEmailConfirmation missing");
+            var queueNameUserDeleted = _config["RabbitMQ:QueueNameUserDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserDeleted missing");
+            var queueNameUserContentDeleted = _config["RabbitMQ:QueueNameUserContentDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserContentDeleted missing");
 
             var factory = new ConnectionFactory
             {
@@ -44,7 +48,11 @@ public class RabbitMqPublisher : IAsyncDisposable
 
             _connection = await factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
-            await _channel.QueueDeclareAsync(queue: queueName, durable: true, exclusive: false, autoDelete: false);
+
+            await _channel.QueueDeclareAsync(queue: queueNameEmailConfirmation, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueDeclareAsync(queue: queueNameUserDeleted, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueDeclareAsync(queue: queueNameUserContentDeleted, durable: true, exclusive: false, autoDelete: false);
+
             _initialized = true;
         }
         finally
@@ -79,8 +87,16 @@ public class RabbitMqPublisher : IAsyncDisposable
 
         var message = new { Email = email, ConfirmationLink = confirmationLink };
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
-        var queueName = _config["RabbitMQ:QueueName"]!;
+        var queueName = _config["RabbitMQ:QueueNameEmailConfirmation"]!;
 
+        await _channel!.BasicPublishAsync(exchange: "", routingKey: queueName, body: body);
+    }
+
+    public async Task PublishUserDeletedAsync(UserDeletedEvent deletedEvent)
+    {
+        await EnsureConnectedAsync();
+        var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(deletedEvent));
+        var queueName = _config["RabbitMQ:QueueNameUserDeleted"] ?? throw new InvalidOperationException("RabbitMQ:QueueNameUserDeleted missing");
         await _channel!.BasicPublishAsync(exchange: "", routingKey: queueName, body: body);
     }
 

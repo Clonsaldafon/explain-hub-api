@@ -64,6 +64,7 @@ builder.Services.AddSingleton(sp =>
     var publisher = new RabbitMqPublisher(sp.GetRequiredService<IConfiguration>());
     return publisher;
 });
+builder.Services.AddHostedService<UserContentDeletedConsumer>();
 
 var app = builder.Build();
 
