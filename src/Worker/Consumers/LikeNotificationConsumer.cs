@@ -24,8 +24,6 @@ public class LikeNotificationConsumer(IEmailSender emailSender, AuthGrpcService.
         string emailTo = string.IsNullOrEmpty(userResponse.Email)
             ? message.Recipient
             : userResponse.Email;
-        
-        string subject = $"Вас лайкнули под постом {message.PostTitle}";
 
         string body = $@"<div style='font-family: Arial, sans-serif; padding: 20px; text-align: center;'>
                 <h2>Пользователю {message.LikerName} понравился ваш {targetName}: {message.PostTitle}</h2>
