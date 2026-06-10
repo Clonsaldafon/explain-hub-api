@@ -3,6 +3,9 @@ using MassTransit;
 using ClickHouse.Client.ADO;
 using ClickHouse.Client.ADO.Parameters;
 using ClickHouse.Client.Utility;
+using AnalyticsService.DTOs;
+using AnalyticsService.Contracts;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +39,7 @@ builder.Services.AddMassTransit(x =>
             h.Username("guest");
             h.Password("guest");
         });
+        
         cfg.ConfigureEndpoints(context);
     });
 });
@@ -152,15 +156,21 @@ public class LikeEventConsumer : IConsumer<LikeTargetEvent>
     }
 }
 
-public class MicroserviceLogDto
+namespace AnalyticsService.DTOs
 {
-    public string ServiceName { get; set; } = string.Empty;
-    public string Level { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
+    public class MicroserviceLogDto
+    {
+        public string ServiceName { get; set; } = string.Empty;
+        public string Level { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
 }
 
-public class LikeTargetEvent
+namespace AnalyticsService.Contracts
 {
-    public int QuestionId { get; set; }
-    public int AuthorId { get; set; }
+    public class LikeTargetEvent
+    {
+        public int QuestionId { get; set; }
+        public int AuthorId { get; set; }
+    }
 }
