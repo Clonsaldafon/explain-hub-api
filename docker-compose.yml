@@ -53,14 +53,14 @@ services:
         condition: service_healthy
       consul:
         condition: service_healthy
-    environment: 
+    environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__AuthDb=Host=${AUTH_DB_HOST:-auth-db};Port=${AUTH_DB_PORT:-5432};Database=${AUTH_DB_NAME:-authdb};Username=${AUTH_DB_USER:-auth};Password=${AUTH_DB_PASSWORD:-auth123}
       - RabbitMQ__HostName=${RABBITMQ_HOST:-rabbitmq}
       - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
-      - Consul__Host=${CONSUL_HOST:-http://consul:8500}     
+      - Consul__Host=${CONSUL_HOST:-http://consul:8500}
       - Jwt__Key=${JWT_KEY}
       - Jwt__Issuer=${JWT_ISSUER:-auth-service}
       - Jwt__Audience=${JWT_AUDIENCE:-api-gateway}
@@ -75,7 +75,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      
+
   analytics-service:
     image: analytics-service
     build:
@@ -89,27 +89,38 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 3
-    
+
   clickhouse-server:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse-server
     ports:
       - "8123:8123"
+      - "9000:9000"
     environment:
       - CLICKHOUSE_DB=logs_db
       - CLICKHOUSE_USER=analytics
-      - CLICKHOUSE_PASSWORD=analytics123      
+      - CLICKHOUSE_PASSWORD=analytics123
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:8123/ping" ]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
       interval: 10s
       timeout: 5s
       retries: 20
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - clickhouse-server
 
 volumes:
   auth-db-data:
