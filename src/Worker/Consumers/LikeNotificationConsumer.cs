@@ -6,21 +6,24 @@ namespace Worker.Consumers;
 
 public class LikeNotificationConsumer(IEmailSender emailSender) : MassTransit.IConsumer<LikeNotificationMessage>
 {
-    
+
     public async Task Consume(ConsumeContext<LikeNotificationMessage> context)
     {
         var message = context.Message;
-        
-        string subject = $"Вас лайкнули под постом {message.PostTitle}";
+        var targetName = string.Equals(message.TargetType, "question", StringComparison.OrdinalIgnoreCase)
+            ? "вопрос"
+            : "ответ";
+
+        string subject = $"Ваш {targetName} получил лайк";
 
         string body = $@"<div style='font-family: Arial, sans-serif; padding: 20px; text-align: center;'>
-                <h2>Ваш ответ к посту {message.PostTitle} понравился пользователю {message.LikerName}!</h2>
-                <p style='margin-bottom: 20px;'>Перейдите по ссылке, чтобы посмотреть ответ:</p>
+                <h2>Пользователю {message.LikerName} понравился ваш {targetName}: {message.PostTitle}</h2>
+                <p style='margin-bottom: 20px;'>Перейдите по ссылке, чтобы посмотреть:</p>
                 <a href='{message.Url}' style='display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;'>
-                    Перейти к посту
+                    Открыть
                 </a>
                 </div>";
-        
+
         await emailSender.SendAsync(message.Recipient, subject, body, context.CancellationToken);
     }
 }
