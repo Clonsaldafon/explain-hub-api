@@ -1,3 +1,4 @@
+using AuthService;
 using MassTransit;
 using Worker.Consumers;
 using Worker.Infrastructure.Email;
@@ -46,6 +47,13 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
+
+builder.Services.AddGrpcClient<AuthGrpcService.AuthGrpcServiceClient>(o =>
+{
+    o.Address = new Uri("http://auth-service:5001");
+});
+
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var host = builder.Build();
 host.Run();

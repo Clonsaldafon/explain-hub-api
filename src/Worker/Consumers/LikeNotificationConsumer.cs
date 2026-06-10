@@ -1,15 +1,24 @@
-﻿using MassTransit;
+﻿using AuthService;
+using MassTransit;
 using Worker.Infrastructure.Email;
 using Worker.Messages;
 
 namespace Worker.Consumers;
 
-public class LikeNotificationConsumer(IEmailSender emailSender) : MassTransit.IConsumer<LikeNotificationMessage>
+public class LikeNotificationConsumer(IEmailSender emailSender, AuthGrpcService.AuthGrpcServiceClient authClient) : MassTransit.IConsumer<LikeNotificationMessage>
 {
     
     public async Task Consume(ConsumeContext<LikeNotificationMessage> context)
     {
         var message = context.Message;
+        
+        var userResponse = await authClient.GetUserEmailAsync(new UserRequest { 
+            UserId = message.Id.ToString()
+        });
+        
+        string emailTo = string.IsNullOrEmpty(userResponse.Email)
+            ? message.Recipient
+            : userResponse.Email;
         
         string subject = $"Вас лайкнули под постом {message.PostTitle}";
 
@@ -21,6 +30,6 @@ public class LikeNotificationConsumer(IEmailSender emailSender) : MassTransit.IC
                 </a>
                 </div>";
         
-        await emailSender.SendAsync(message.Recipient, subject, body, context.CancellationToken);
+        await emailSender.SendAsync(emailTo, subject, body, context.CancellationToken);
     }
 }
