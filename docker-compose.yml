@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  qna-db:
+    image: postgres:15
+    container_name: qna-db
+    environment:
+      POSTGRES_DB: qnadb
+      POSTGRES_USER: qna
+      POSTGRES_PASSWORD: qna123
+    ports:
+      - "5433:5432"
+    volumes:
+      - qna-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qna -d qnadb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -30,6 +47,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
 
   consul:
     image: hashicorp/consul:1.15
@@ -71,6 +101,50 @@ services:
     ports:
       - "8080:80"
       - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  qna-service:
+    build:
+      context: .
+      dockerfile: src/QnaService/Dockerfile
+    container_name: qna-service
+    depends_on:
+      qna-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      consul:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__QnaDb=Host=${QNA_DB_HOST:-qna-db};Port=${QNA_DB_PORT:-5432};Database=${QNA_DB_NAME:-qnadb};Username=${QNA_DB_USER:-qna};Password=${QNA_DB_PASSWORD:-qna123}
+      - App__PublicBaseUrl=${QNA_PUBLIC_BASE_URL:-http://localhost:8082}
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=${JWT_ISSUER:-auth-service}
+      - Jwt__Audience=${JWT_AUDIENCE:-api-gateway}
+      - RabbitMQ__HostName=${RABBITMQ_HOST:-rabbitmq}
+      - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
+      - RabbitMQ__ExchangeName=${RABBITMQ_EMAIL_EXCHANGE:-email-exchange}
+      - RabbitMQ__LikeRoutingKey=${RABBITMQ_LIKE_ROUTING_KEY:-like-notification}
+      - Minio__Endpoint=${MINIO_ENDPOINT:-minio:9000}
+      - Minio__PublicEndpoint=${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+      - Minio__AccessKey=${MINIO_ROOT_USER:-minioadmin}
+      - Minio__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - Minio__BucketName=${MINIO_BUCKET_NAME:-qna-media}
+      - Minio__UseSsl=${MINIO_USE_SSL:-false}
+      - Consul__Host=${CONSUL_HOST:-http://consul:8500}
+      - Consul__ServiceAddress=qna-service
+      - Consul__ServicePort=80
+    ports:
+      - "8082:80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 15s
@@ -137,4 +211,6 @@ services:
       - SmtpSettings__SenderName=ExplainHub
 volumes:
   auth-db-data:
+  qna-db-data:
   clickhouse-data:
+  minio-data:
