@@ -9,6 +9,7 @@ using AuthService.Services;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.Security.Claims;
 using Prometheus;
+using MassTransit;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,12 +61,31 @@ builder.Services.AddHostedService<TokenCleanupService>();
 builder.Services.AddGrpc();
 builder.Services.AddGrpcReflection();
 
-builder.Services.AddSingleton(sp =>
+builder.Services.AddMassTransit(x =>
 {
-    var publisher = new RabbitMqPublisher(sp.GetRequiredService<IConfiguration>());
-    return publisher;
+    x.AddConsumer<UserContentDeletedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+
+        cfg.Host(host, "/", h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+        });
+
+        cfg.ClearSerialization();
+        cfg.UseRawJsonSerializer(RawSerializerOptions.AnyMessageType);
+
+        cfg.ReceiveEndpoint(builder.Configuration["RabbitMQ:QueueNameUserContentDeleted"] ?? "user_content_deleted", e =>
+        {
+            e.PrefetchCount = 1;
+            e.ConfigureConsumer<UserContentDeletedConsumer>(context);
+        });
+    });
 });
-builder.Services.AddHostedService<UserContentDeletedConsumer>();
+builder.Services.AddSingleton<RabbitMqPublisher>();
 
 var analyticsUrl = builder.Configuration["Analytics:ServiceUrl"] ?? "http://analytics-service:8080/";
 builder.Logging.AddProvider(new ClickHouseLoggerProvider(analyticsUrl, "auth-service"));
@@ -179,9 +199,6 @@ app.MapGrpcService<UserService>().RequireHost("*:5001");
 app.MapGrpcReflectionService();
 
 app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client.");
-
-var publisher = app.Services.GetRequiredService<RabbitMqPublisher>();
-AppDomain.CurrentDomain.ProcessExit += async (s, e) => await publisher.DisposeAsync();
 
 app.MapMetrics();
 
