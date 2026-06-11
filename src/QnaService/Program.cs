@@ -80,7 +80,7 @@ builder.Services.AddAuthorization();
 builder.Services.Configure<MinioSettings>(builder.Configuration.GetSection("Minio"));
 builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMQ"));
 builder.Services.AddSingleton<IObjectStorageService, MinioObjectStorageService>();
-builder.Services.AddSingleton<RabbitMqLikePublisher>();
+builder.Services.AddScoped<RabbitMqLikePublisher>();
 
 var analyticsUrl = builder.Configuration["Analytics:ServiceUrl"] ?? "http://analytics-service:8080/";
 builder.Logging.AddProvider(new ClickHouseLoggerProvider(analyticsUrl, "qna-service"));

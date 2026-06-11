@@ -85,7 +85,7 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
-builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddScoped<RabbitMqPublisher>();
 
 var analyticsUrl = builder.Configuration["Analytics:ServiceUrl"] ?? "http://analytics-service:8080/";
 builder.Logging.AddProvider(new ClickHouseLoggerProvider(analyticsUrl, "auth-service"));
