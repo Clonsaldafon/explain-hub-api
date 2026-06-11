@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+service AuthGrpcService {
+    rpc GetUserEmail (UserRequest) returns (UserEmailResponse);
+}
+
+message UserRequest {
+    string user_id = 1;
+}
+
+message UserEmailResponse {
+    string email = 1;
+}

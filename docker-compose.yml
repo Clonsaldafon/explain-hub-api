@@ -27,9 +27,9 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   consul:
     image: hashicorp/consul:1.15
@@ -70,6 +70,7 @@ services:
       - Admin__Password=${ADMIN_PASSWORD:-admin123}
     ports:
       - "8080:80"
+      - "5001:5001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 15s
@@ -121,6 +122,29 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - clickhouse-server
+
+  worker:
+    build: 
+      context: .
+      dockerfile: src/Worker/Dockerfile
+    container_name: worker-service
+    env_file:
+      - .env
+    depends_on:
+      auth-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__UserName=${RABBITMQ_USER:-guest}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD:-guest}
+      - SmtpSettings__Host=smtp.yandex.ru
+      - SmtpSettings__Port=465
+      - SmtpSettings__Username=${SMTP_USERNAME}
+      - SmtpSettings__Password=${SMTP_PASSWORD}
+      - SmtpSettings__SenderName=ExplainHub
 
 volumes:
   auth-db-data:

@@ -2,5 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/AnalyticsService/AnalyticsService.csproj" />
     <Project Path="src/AuthService/AuthService.csproj" />
+    <Project Path="src/Worker/Worker.csproj" />
   </Folder>
 </Solution>
