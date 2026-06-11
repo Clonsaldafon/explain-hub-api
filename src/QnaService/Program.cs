@@ -1,5 +1,6 @@
 using System.Text;
 using Consul;
+using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +22,29 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
-builder.Services.AddHostedService<UserDeletedConsumer>();
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<UserDeletedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+
+        cfg.Host(host, "/", h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+        });
+
+        cfg.ClearSerialization();
+        cfg.UseRawJsonSerializer(RawSerializerOptions.AnyMessageType);
+
+        cfg.ReceiveEndpoint(builder.Configuration["RabbitMQ:QueueNameUserDeleted"] ?? "user.deleted", e =>
+        {
+            e.ConfigureConsumer<UserDeletedConsumer>(context);
+        });
+    });
+});
 
 builder.Services.AddDbContext<QnaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("QnaDb")));
@@ -92,9 +115,6 @@ app.MapControllers();
 app.MapMetrics();
 app.MapHealthChecks("/health");
 app.MapGet("/", () => "ExplainHub Q&A service");
-
-var publisher = app.Services.GetRequiredService<RabbitMqLikePublisher>();
-AppDomain.CurrentDomain.ProcessExit += async (_, _) => await publisher.DisposeAsync();
 
 app.Run();
 
