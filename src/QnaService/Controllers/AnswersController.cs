@@ -204,6 +204,7 @@ public class AnswersController : ApiControllerBase
 
         await _likePublisher.PublishAsync(new LikeNotificationMessage
         {
+            Id = recipientUserId, 
             Recipient = recipientEmail,
             LikerName = liker.Email,
             PostTitle = questionTitle,

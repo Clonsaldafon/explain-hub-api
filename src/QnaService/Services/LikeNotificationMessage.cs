@@ -2,7 +2,7 @@ namespace QnaService.Services;
 
 public class LikeNotificationMessage
 {
-    public Guid MessageId { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string Url { get; set; } = string.Empty;
     public string Recipient { get; set; } = string.Empty;
