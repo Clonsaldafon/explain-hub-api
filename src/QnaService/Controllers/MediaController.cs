@@ -27,7 +27,7 @@ public class MediaController : ApiControllerBase
     [RequestSizeLimit(100_000_000)]
     public async Task<ActionResult<MediaAttachmentDto>> AttachToQuestion(
         Guid questionId,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken ct)
     {
         var question = await _db.Questions.FirstOrDefaultAsync(q => q.Id == questionId && !q.IsDeleted, ct);
@@ -73,7 +73,7 @@ public class MediaController : ApiControllerBase
     [RequestSizeLimit(100_000_000)]
     public async Task<ActionResult<MediaAttachmentDto>> AttachToAnswer(
         Guid answerId,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken ct)
     {
         var answer = await _db.Answers
